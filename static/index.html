@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ADK Agent Dashboard</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>🤖 ADK Agent Monitor</h1>
+            <div id="status-badge" class="badge">Checking...</div>
+        </header>
+
+        <div class="grid">
+            <div class="card">
+                <h3>Uptime</h3>
+                <div id="uptime" class="value">--</div>
+            </div>
+            <div class="card">
+                <h3>Total Requests</h3>
+                <div id="requests" class="value">0</div>
+            </div>
+            <div class="card">
+                <h3>Errors</h3>
+                <div id="errors" class="value error">0</div>
+            </div>
+            <div class="card">
+                <h3>Model</h3>
+                <div id="model" class="value small">--</div>
+            </div>
+        </div>
+
+        <div class="card full-width">
+            <h3>Agent Details</h3>
+            <div class="details-grid">
+                <div class="detail-item">
+                    <span class="label">Name:</span>
+                    <span id="agent-name" class="data">--</span>
+                </div>
+                <div class="detail-item">
+                    <span class="label">Last Updated:</span>
+                    <span id="last-updated" class="data">--</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="card full-width chat-section">
+            <h3>Chat with Agent</h3>
+            <div id="chat-history" class="chat-history">
+                <div class="message agent">
+                    <div class="message-content">
+                        Hello! I'm your ADK agent. How can I help you today?
+                    </div>
+                </div>
+            </div>
+            <div class="chat-input-area">
+                <input type="text" id="chat-input" placeholder="Type your message..." autocomplete="off">
+                <button id="send-btn">Send</button>
+            </div>
+        </div>
+    </div>
+    <script src="/static/script.js"></script>
+</body>
+
+</html>

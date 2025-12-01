@@ -1,0 +1,12 @@
+google-adk>=0.1.0
+fastapi
+uvicorn
+python-multipart
+python-dotenv
+pytest
+httpx
+pytest-asyncio
+google-cloud-pubsub
+google-cloud-logging
+google-cloud-aiplatform
+google-cloud-discoveryengine

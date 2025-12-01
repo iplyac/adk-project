@@ -1,0 +1,8 @@
+node_modules/
+.env
+api-key
+*.log
+.DS_Store
+key-personal.json
+key.json
+key-vertex.json

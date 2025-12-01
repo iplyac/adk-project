@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Chat Test</title>
+</head>
+
+<body>
+    <h1>Simple Chat Test</h1>
+    <input type="text" id="msg" placeholder="Type message" style="width: 300px;">
+    <button onclick="sendMsg()">Send</button>
+    <div id="response" style="margin-top: 20px; padding: 10px; border: 1px solid #ccc;"></div>
+
+    <script>
+        async function sendMsg() {
+            const msg = document.getElementById('msg').value;
+            const responseDiv = document.getElementById('response');
+
+            responseDiv.innerHTML = 'Sending...';
+
+            try {
+                const res = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        message: msg,
+                        session_id: 'test_' + Date.now()
+                    })
+                });
+
+                const data = await res.json();
+                responseDiv.innerHTML = '<strong>Response:</strong> ' + data.response;
+            } catch (error) {
+                responseDiv.innerHTML = '<strong>Error:</strong> ' + error.message;
+                console.error('Error:', error);
+            }
+        }
+    </script>
+</body>
+
+</html>
