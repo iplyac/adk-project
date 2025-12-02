@@ -72,6 +72,7 @@ from google.adk.runners import Runner
 from google.adk.sessions.in_memory_session_service import InMemorySessionService
 from google.genai import types
 from my_agent.devops_agent import devops_agent
+from my_agent.session_monitor import session_monitor
 
 def ask_devops(request: str) -> str:
     """Delegates a request to the DevOps agent.
@@ -141,6 +142,15 @@ def ask_devops(request: str) -> str:
 
     return response_text
 
+def get_session_summary(scope: str = "active") -> dict:
+    """Return a summary of known sessions."""
+    return {"status": "success", "report": session_monitor.get_summary()}
+
+
+def get_session_details(session_id: str) -> dict:
+    """Return details for a specific session."""
+    return {"status": "success", "report": session_monitor.get_details(session_id)}
+
 from google.adk.models.google_llm import GoogleLLMVariant
 from my_agent.vertex_tools import search_knowledge_base
 
@@ -163,5 +173,12 @@ agent = Agent(
         "use the 'ask_devops' tool to delegate the request. "
         "Always be polite and concise."
     ),
-    tools=[get_weather, get_current_time, ask_devops, search_knowledge_base],
+    tools=[
+        get_weather,
+        get_current_time,
+        ask_devops,
+        search_knowledge_base,
+        get_session_summary,
+        get_session_details,
+    ],
 )

@@ -1,3 +1,4 @@
+import os
 import time
 import asyncio
 import logging
@@ -15,6 +16,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from my_agent.agent import agent
+from my_agent.session_monitor import session_monitor
 
 # Configure logging
 logging.basicConfig(
@@ -109,6 +111,20 @@ async def chat_endpoint(request: ChatRequest):
     session_id = request.session_id
     user_id = "default_user"
     user_message = request.message
+
+    # Monitor session creation/message
+    session_monitor.log_event(
+        session_id=session_id,
+        user_id=user_id,
+        agent_name=agent.name,
+        event_type="message_received",
+        detail="User message received",
+    )
+    session_monitor.record_message(session_id, user_id, agent.name)
+
+    # In test mode, short-circuit to avoid real model calls
+    if os.getenv("ADK_TEST_MODE", "").lower() == "true":
+        return ChatResponse(response=f"[test-mode] {user_message or ''}")
     
     try:
         # Ensure session exists
@@ -140,7 +156,16 @@ async def chat_endpoint(request: ChatRequest):
                 for part in event.content.parts:
                     if part.text:
                         response_text += part.text
-        
+        session_monitor.log_event(
+            session_id=session_id,
+            user_id=user_id,
+            agent_name=agent.name,
+            event_type="completed",
+            detail="Chat response generated",
+        )
+        alerts = session_monitor.pop_alerts(session_id)
+        if alerts:
+            response_text += "\n\n[Session updates]\n" + "\n".join(alerts)
         return ChatResponse(response=response_text)
         
     except Exception as e:
@@ -148,4 +173,11 @@ async def chat_endpoint(request: ChatRequest):
         logger.error(f"Error in chat endpoint: {e}", exc_info=True)
         logger.error(f"Session ID: {session_id}, User ID: {user_id}, Message: {user_message}")
         stats["error_count"] += 1
+        session_monitor.log_event(
+            session_id=session_id,
+            user_id=user_id,
+            agent_name=agent.name,
+            event_type="error",
+            error=str(e),
+        )
         return ChatResponse(response="I'm sorry, I encountered an error processing your request.")

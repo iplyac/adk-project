@@ -76,7 +76,10 @@ function appendMessage(text, sender) {
     const chatHistory = document.getElementById('chat-history');
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${sender}`;
-    messageDiv.textContent = text;
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'message-content';
+    contentDiv.textContent = text;
+    messageDiv.appendChild(contentDiv);
     chatHistory.appendChild(messageDiv);
     chatHistory.scrollTop = chatHistory.scrollHeight;
 }
@@ -86,14 +89,21 @@ async function updateDashboard() {
         // Fetch health
         const healthResponse = await fetch(`${API_URL}/health`);
         const healthData = await healthResponse.json();
-        document.getElementById('status').textContent = healthData.status;
+        const statusBadge = document.getElementById('status-badge');
+        const isHealthy = healthData.status === 'healthy';
+        statusBadge.textContent = isHealthy ? 'Healthy' : 'Unhealthy';
+        statusBadge.classList.toggle('healthy', isHealthy);
+        statusBadge.classList.toggle('error', !isHealthy);
         document.getElementById('uptime').textContent = Math.floor(healthData.uptime_seconds) + 's';
 
         // Fetch stats
         const statsResponse = await fetch(`${API_URL}/stats`);
         const statsData = await statsResponse.json();
-        document.getElementById('request-count').textContent = statsData.request_count;
-        document.getElementById('error-count').textContent = statsData.error_count;
+        document.getElementById('requests').textContent = statsData.request_count;
+        document.getElementById('errors').textContent = statsData.error_count;
+        document.getElementById('model').textContent = statsData.model || '--';
+        document.getElementById('agent-name').textContent = statsData.agent_name || '--';
+        document.getElementById('last-updated').textContent = new Date().toLocaleTimeString();
     } catch (error) {
         console.error('Error updating dashboard:', error);
     }

@@ -3,6 +3,13 @@ from fastapi.testclient import TestClient
 from app import app, stats
 
 
+@pytest.fixture(autouse=True)
+def enable_test_mode(monkeypatch):
+    """Force the API into test mode to avoid real model calls."""
+    monkeypatch.setenv("ADK_TEST_MODE", "true")
+    yield
+
+
 @pytest.fixture
 def client():
     """Create a test client for the FastAPI app."""
