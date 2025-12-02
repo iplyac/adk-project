@@ -26,6 +26,16 @@ logger = logging.getLogger(__name__)
 # Initialize FastAPI app
 app = FastAPI(title="ADK Agent with Monitoring")
 
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Global stats
 stats = {
     "start_time": time.time(),

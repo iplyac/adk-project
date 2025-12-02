@@ -19,15 +19,27 @@ if ! command -v gcloud &> /dev/null; then
     exit 1
 fi
 
+# Check for API key file
+if [ ! -f "api-key" ]; then
+    echo "❌ Error: api-key file not found!"
+    echo "Please create a file named 'api-key' containing your Google Gemini API key."
+    exit 1
+fi
+
+# Read API Key
+API_KEY=$(cat api-key | tr -d '\n')
+if [ -z "$API_KEY" ]; then
+    echo "❌ Error: api-key file is empty!"
+    exit 1
+fi
+
 # Set project
 echo "📋 Setting project..."
 gcloud config set project ${PROJECT_ID}
 
-# Enable required APIs
+# Enable required APIs (ignore errors if already enabled/permission denied)
 echo "🔧 Enabling required APIs..."
-gcloud services enable run.googleapis.com
-gcloud services enable cloudbuild.googleapis.com
-gcloud services enable artifactregistry.googleapis.com
+gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com || echo "⚠️  Warning: Could not enable APIs. Assuming they are already enabled."
 
 # Build and push image
 echo "🏗️  Building Docker image..."
@@ -40,9 +52,7 @@ gcloud run deploy ${SERVICE_NAME} \
   --platform managed \
   --region ${REGION} \
   --allow-unauthenticated \
-  --set-env-vars "GCP_PROJECT_ID=${PROJECT_ID},GCP_LOCATION=${REGION}" \
-  --set-secrets "GOOGLE_API_KEY=GOOGLE_API_KEY:latest" \
-  --set-secrets "GOOGLE_APPLICATION_CREDENTIALS=/secrets/key.json=GCP_SERVICE_ACCOUNT_KEY:latest" \
+  --set-env-vars "GCP_PROJECT_ID=${PROJECT_ID},GCP_LOCATION=${REGION},GOOGLE_API_KEY=${API_KEY}" \
   --memory 2Gi \
   --cpu 2 \
   --timeout 300 \
@@ -62,4 +72,4 @@ echo ""
 echo "Next steps:"
 echo "  1. Test the endpoint above"
 echo "  2. Run: python register_agent.py to register with Agent Engine"
-echo "  3. Update static/script.js with the new URL if needed"
+echo "  3. The UI is available at: ${SERVICE_URL}/static/index.html"

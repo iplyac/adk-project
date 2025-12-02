@@ -10,7 +10,7 @@ const CONFIG = {
     },
     // Cloud Run production
     production: {
-        apiUrl: 'https://adk-agent-298607833444.us-central1.run.app'
+        apiUrl: '' // Use relative path
     }
 };
 
