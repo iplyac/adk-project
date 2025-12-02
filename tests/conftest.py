@@ -31,7 +31,7 @@ def reset_stats():
 def sample_chat_request():
     """Sample chat request payload."""
     return {
-        "message": "What's the weather in New York?",
+        "message": "Summarize recent session activity",
         "session_id": "test_session_123"
     }
 

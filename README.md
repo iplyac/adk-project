@@ -34,7 +34,7 @@ The DevOps agent requires Google Cloud credentials to interact with Pub/Sub and 
 ## Features
 
 - 🤖 **Gemini Integration**: Powered by `gemini-2.0-flash-exp`
-- 🛠️ **Custom Tools**: Includes weather and time checking capabilities
+- 🛠️ **Custom Tools**: Delegates DevOps tasks, searches documentation, and exposes session insights
 - 🖥️ **Multiple Interfaces**: Run via CLI or Web UI
 - 🐍 **Python-based**: Built with the official `google-adk` package
 
@@ -72,6 +72,12 @@ Run the agent in your terminal:
 adk run my_agent
 ```
 
+To avoid external calls during local testing, set:
+
+```bash
+export ADK_TEST_MODE=true
+```
+
 ### Web Interface
 
 Run the agent with a web-based chat interface:
@@ -95,5 +101,7 @@ adk-project/
 ## Tools
 
 The agent has access to the following tools:
-- `get_weather(city)`: Get weather information for a city
-- `get_current_time(city)`: Get current time for a city
+- `ask_devops(request)`: Delegate DevOps requests to the specialized DevOps agent
+- `search_knowledge_base(query)`: Search the knowledge base for documentation answers
+- `get_session_summary(scope="active")`: Return a summary of known sessions
+- `get_session_details(session_id)`: Return details for a specific session
