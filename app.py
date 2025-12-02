@@ -2,8 +2,10 @@ import os
 import time
 import asyncio
 import logging
+import math
+import uuid
 from typing import Dict, List, Optional
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -42,7 +44,10 @@ app.add_middleware(
 stats = {
     "start_time": time.time(),
     "request_count": 0,
-    "error_count": 0
+    "error_count": 0,
+    "latencies": [],
+    "tool_calls_total": 0,
+    "tool_calls_by_name": {}
 }
 
 # Mount static files for dashboard
@@ -64,12 +69,23 @@ async def health_check():
 @app.get("/stats")
 async def get_stats():
     uptime = time.time() - stats["start_time"]
+    latencies = stats.get("latencies", [])
+    latency_avg = sum(latencies) / len(latencies) if latencies else 0.0
+    latency_p95 = 0.0
+    if latencies:
+        sorted_lats = sorted(latencies)
+        idx = min(len(sorted_lats) - 1, math.ceil(0.95 * len(sorted_lats)) - 1)
+        latency_p95 = sorted_lats[idx]
     return {
         "request_count": stats["request_count"],
         "error_count": stats["error_count"],
         "uptime_seconds": uptime,
         "agent_name": agent.name,
-        "model": str(agent.model)
+        "model": str(agent.model),
+        "latency_avg_ms": round(latency_avg * 1000, 2),
+        "latency_p95_ms": round(latency_p95 * 1000, 2),
+        "tool_calls_total": stats.get("tool_calls_total", 0),
+        "tool_calls_by_name": stats.get("tool_calls_by_name", {}),
     }
 
 # Middleware to count requests
@@ -106,11 +122,14 @@ class ChatResponse(BaseModel):
     response: str
 
 @app.post("/api/chat", response_model=ChatResponse)
-async def chat_endpoint(request: ChatRequest):
+async def chat_endpoint(request: ChatRequest, response: Response):
     stats["request_count"] += 1
     session_id = request.session_id
     user_id = "default_user"
     user_message = request.message
+    trace_id = str(uuid.uuid4())
+    start_time = time.time()
+    response.headers["X-Trace-Id"] = trace_id
 
     # Monitor session creation/message
     session_monitor.log_event(
@@ -121,6 +140,16 @@ async def chat_endpoint(request: ChatRequest):
         detail="User message received",
     )
     session_monitor.record_message(session_id, user_id, agent.name)
+
+    logger.info(
+        "chat_request",
+        extra={
+            "trace_id": trace_id,
+            "session_id": session_id,
+            "user_id": user_id,
+            "agent_name": agent.name,
+        },
+    )
 
     # In test mode, short-circuit to avoid real model calls
     if os.getenv("ADK_TEST_MODE", "").lower() == "true":
@@ -150,12 +179,36 @@ async def chat_endpoint(request: ChatRequest):
                 parts=[types.Part(text=user_message)]
             )
         ):
+            tool_name = None
+            tool_attr = getattr(event, "tool", None)
+            if tool_attr:
+                tool_name = getattr(tool_attr, "name", None) or str(tool_attr)
+            tool_call = getattr(event, "tool_call", None)
+            if not tool_name and tool_call:
+                tool_name = getattr(tool_call, "name", None)
+            if tool_name:
+                stats["tool_calls_total"] += 1
+                stats["tool_calls_by_name"][tool_name] = stats["tool_calls_by_name"].get(tool_name, 0) + 1
+                logger.info(
+                    "tool_call",
+                    extra={
+                        "trace_id": trace_id,
+                        "session_id": session_id,
+                        "user_id": user_id,
+                        "tool": tool_name,
+                    },
+                )
+
             # Collect model response text
             # We look for events authored by the agent (or 'model') that have content
             if event.content and event.content.parts:
                 for part in event.content.parts:
                     if part.text:
                         response_text += part.text
+        latency = time.time() - start_time
+        stats["latencies"].append(latency)
+        if len(stats["latencies"]) > 200:
+            stats["latencies"] = stats["latencies"][-200:]
         session_monitor.log_event(
             session_id=session_id,
             user_id=user_id,
@@ -163,9 +216,18 @@ async def chat_endpoint(request: ChatRequest):
             event_type="completed",
             detail="Chat response generated",
         )
-        alerts = session_monitor.pop_alerts(session_id)
-        if alerts:
-            response_text += "\n\n[Session updates]\n" + "\n".join(alerts)
+        logger.info(
+            "chat_response",
+            extra={
+                "trace_id": trace_id,
+                "session_id": session_id,
+                "user_id": user_id,
+                "latency_ms": round(latency * 1000, 2),
+                "tool_calls": stats.get("tool_calls_total", 0),
+            },
+        )
+        # Drain alerts so they don't accumulate, but keep user response clean
+        session_monitor.pop_alerts(session_id)
         return ChatResponse(response=response_text)
         
     except Exception as e:
@@ -179,5 +241,14 @@ async def chat_endpoint(request: ChatRequest):
             agent_name=agent.name,
             event_type="error",
             error=str(e),
+        )
+        logger.error(
+            "chat_error",
+            extra={
+                "trace_id": trace_id,
+                "session_id": session_id,
+                "user_id": user_id,
+                "error": str(e),
+            },
         )
         return ChatResponse(response="I'm sorry, I encountered an error processing your request.")

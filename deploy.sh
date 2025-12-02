@@ -6,6 +6,8 @@ PROJECT_ID="gen-lang-client-0741140892"
 REGION="us-central1"
 SERVICE_NAME="adk-agent"
 IMAGE_NAME="gcr.io/${PROJECT_ID}/${SERVICE_NAME}"
+BOT_SERVICE_NAME="adk-telegram-bot"
+BUILD_TIMEOUT="1200s" # allow up to 20 minutes in Cloud Build
 
 echo "🚀 Deploying ADK Agent to Cloud Run..."
 echo "Project: ${PROJECT_ID}"
@@ -33,6 +35,21 @@ if [ -z "$API_KEY" ]; then
     exit 1
 fi
 
+# Read Telegram bot token
+if [ -n "${TELEGRAM_BOT_TOKEN:-}" ]; then
+    BOT_TOKEN="${TELEGRAM_BOT_TOKEN}"
+elif [ -f ".telegram_bot" ]; then
+    RAW_BOT_TOKEN=$(cat .telegram_bot)
+    BOT_TOKEN=$(printf "%s" "$RAW_BOT_TOKEN" | sed -n 's/.*TELEGRAM_BOT_TOKEN=//p' | head -n1 | tr -d '\r')
+    if [ -z "$BOT_TOKEN" ]; then
+        BOT_TOKEN=$(printf "%s" "$RAW_BOT_TOKEN" | grep -Eo '[0-9]+:[A-Za-z0-9_-]+' | head -n1)
+    fi
+fi
+if [ -z "$BOT_TOKEN" ]; then
+    echo "❌ Error: Telegram bot token not found. Set TELEGRAM_BOT_TOKEN or add .telegram_bot"
+    exit 1
+fi
+
 # Set project
 echo "📋 Setting project..."
 gcloud config set project ${PROJECT_ID}
@@ -43,7 +60,8 @@ gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregi
 
 # Build and push image
 echo "🏗️  Building Docker image..."
-gcloud builds submit --tag ${IMAGE_NAME}
+echo "⏳ Cloud Build can take several minutes, please wait..."
+gcloud builds submit --tag ${IMAGE_NAME} --timeout=${BUILD_TIMEOUT}
 
 # Deploy to Cloud Run
 echo "☁️  Deploying to Cloud Run..."
@@ -69,7 +87,29 @@ echo "Test the deployment:"
 echo "  curl ${SERVICE_URL}/health"
 echo "  curl -X POST ${SERVICE_URL}/api/chat -H 'Content-Type: application/json' -d '{\"message\": \"Hello\", \"session_id\": \"test\"}'"
 echo ""
+# Deploy Telegram bot (reuses same image). We run bot + uvicorn for health/metrics on :8080.
+echo ""
+echo "🤖 Deploying Telegram bot to Cloud Run..."
+gcloud run deploy ${BOT_SERVICE_NAME} \
+  --image ${IMAGE_NAME} \
+  --platform managed \
+  --region ${REGION} \
+  --allow-unauthenticated \
+  --command "/bin/sh" \
+  --args "/app/start_bot_service.sh" \
+  --set-env-vars "TELEGRAM_BOT_TOKEN=${BOT_TOKEN},AGENT_API_URL=${SERVICE_URL}" \
+  --memory 512Mi \
+  --cpu 1 \
+  --timeout 300
+
+BOT_URL=$(gcloud run services describe ${BOT_SERVICE_NAME} --region ${REGION} --format 'value(status.url)')
+
+echo ""
+echo "✅ Telegram bot deployed!"
+echo "🌐 Bot Service URL (for health): ${BOT_URL}"
+echo ""
 echo "Next steps:"
-echo "  1. Test the endpoint above"
-echo "  2. Run: python register_agent.py to register with Agent Engine"
-echo "  3. The UI is available at: ${SERVICE_URL}/static/index.html"
+echo "  1. Test the agent: curl ${SERVICE_URL}/health"
+echo "  2. Test the bot health: curl ${BOT_URL}/health"
+echo "  3. Run: python register_agent.py to register with Agent Engine"
+echo "  4. UI: ${SERVICE_URL}/static/index.html"

@@ -32,6 +32,10 @@ class TestStatsEndpoint:
         assert "uptime_seconds" in data
         assert "agent_name" in data
         assert "model" in data
+        assert "latency_avg_ms" in data
+        assert "latency_p95_ms" in data
+        assert "tool_calls_total" in data
+        assert "tool_calls_by_name" in data
         
         assert data["agent_name"] == "gemini_adk_agent"
         assert "gemini" in data["model"].lower()

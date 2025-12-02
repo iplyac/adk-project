@@ -10,3 +10,4 @@ google-cloud-pubsub
 google-cloud-logging
 google-cloud-aiplatform
 google-cloud-discoveryengine
+python-telegram-bot==21.4
