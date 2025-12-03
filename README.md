@@ -14,22 +14,10 @@ The DevOps agent requires Google Cloud credentials to interact with Pub/Sub and 
    ```
    This creates a credentials file that the client libraries will automatically discover.
 
-### Docker / Production
-1. Create a Service Account in your Google Cloud Console.
-2. Grant necessary roles (e.g., `Pub/Sub Editor`, `Logging Log Writer`).
-3. Create and download a JSON key file for the service account.
-4. Save the key file in the project directory (e.g., as `gcp-key.json`).
-5. Update `docker-compose.yml` to mount the key and set the environment variable:
-
-   ```yaml
-   services:
-     adk-agent:
-       # ...
-       environment:
-         - GOOGLE_APPLICATION_CREDENTIALS=/app/gcp-key.json
-       volumes:
-         - ./gcp-key.json:/app/gcp-key.json
-   ```
+### Docker / Production (Cloud Run)
+- Секреты: храните ключи в Secret Manager (`GOOGLE_API_KEY`, `TELEGRAM_BOT_TOKEN`) и прокидывайте в Cloud Run через `--set-secrets` или `GOOGLE_API_KEY_SECRET_ID` / `TELEGRAM_BOT_TOKEN_SECRET_ID`.
+- Рекомендованный регион для меньшей задержки с Telegram: `europe-west4`.
+- Webhook для бота: задайте `TELEGRAM_WEBHOOK_URL=https://<bot-service-url>/telegram/webhook` (путь можно переопределить `TELEGRAM_WEBHOOK_PATH`).
 
 ## Features
 
@@ -59,6 +47,7 @@ The DevOps agent requires Google Cloud credentials to interact with Pub/Sub and 
 3. Configure API Key:
    - **Recommended (production):** Store secrets in [Google Secret Manager](https://cloud.google.com/secret-manager). Set the environment variable `GOOGLE_API_KEY_SECRET_ID` to the secret name (or full resource path). At startup the app will fetch the value into `GOOGLE_API_KEY`. You can also set `TELEGRAM_BOT_TOKEN_SECRET_ID` to hydrate the Telegram token.
    - **Local development:** You can still use a `.env` file with raw values if Secret Manager is not configured.
+   - Webhook mode: set `TELEGRAM_WEBHOOK_URL` (`https://<bot-service>/telegram/webhook`).
 
 ## Usage
 

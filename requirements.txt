@@ -12,3 +12,4 @@ google-cloud-aiplatform
 google-cloud-discoveryengine
 google-cloud-secret-manager
 python-telegram-bot==21.4
+python-telegram-bot[webhooks]==21.4
