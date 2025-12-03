@@ -8,6 +8,8 @@ SERVICE_NAME="adk-agent"
 IMAGE_NAME="gcr.io/${PROJECT_ID}/${SERVICE_NAME}"
 BOT_SERVICE_NAME="adk-telegram-bot"
 BUILD_TIMEOUT="1200s" # allow up to 20 minutes in Cloud Build
+API_KEY_SECRET_ID_DEFAULT="GOOGLE_API_KEY"
+BOT_TOKEN_SECRET_ID_DEFAULT="TELEGRAM_BOT_TOKEN"
 
 echo "🚀 Deploying ADK Agent to Cloud Run..."
 echo "Project: ${PROJECT_ID}"
@@ -21,33 +23,40 @@ if ! command -v gcloud &> /dev/null; then
     exit 1
 fi
 
-# Check for API key file
-if [ ! -f "api-key" ]; then
-    echo "❌ Error: api-key file not found!"
-    echo "Please create a file named 'api-key' containing your Google Gemini API key."
-    exit 1
-fi
+# Resolve secret IDs (default names)
+API_KEY_SECRET_ID=${GOOGLE_API_KEY_SECRET_ID:-$API_KEY_SECRET_ID_DEFAULT}
+BOT_TOKEN_SECRET_ID=${TELEGRAM_BOT_TOKEN_SECRET_ID:-$BOT_TOKEN_SECRET_ID_DEFAULT}
 
-# Read API Key
-API_KEY=$(cat api-key | tr -d '\n')
-if [ -z "$API_KEY" ]; then
-    echo "❌ Error: api-key file is empty!"
-    exit 1
-fi
-
-# Read Telegram bot token
-if [ -n "${TELEGRAM_BOT_TOKEN:-}" ]; then
-    BOT_TOKEN="${TELEGRAM_BOT_TOKEN}"
-elif [ -f ".telegram_bot" ]; then
-    RAW_BOT_TOKEN=$(cat .telegram_bot)
-    BOT_TOKEN=$(printf "%s" "$RAW_BOT_TOKEN" | sed -n 's/.*TELEGRAM_BOT_TOKEN=//p' | head -n1 | tr -d '\r')
-    if [ -z "$BOT_TOKEN" ]; then
-        BOT_TOKEN=$(printf "%s" "$RAW_BOT_TOKEN" | grep -Eo '[0-9]+:[A-Za-z0-9_-]+' | head -n1)
+# Read API key only if no secret ID is provided (for local/compat)
+API_KEY=""
+if [ -z "$API_KEY_SECRET_ID" ]; then
+    if [ ! -f "api-key" ]; then
+        echo "❌ Error: api-key file not found and no GOOGLE_API_KEY_SECRET_ID provided!"
+        exit 1
+    fi
+    API_KEY=$(cat api-key | tr -d '\n')
+    if [ -z "$API_KEY" ]; then
+        echo "❌ Error: api-key file is empty!"
+        exit 1
     fi
 fi
-if [ -z "$BOT_TOKEN" ]; then
-    echo "❌ Error: Telegram bot token not found. Set TELEGRAM_BOT_TOKEN or add .telegram_bot"
-    exit 1
+
+# Read Telegram bot token only if no secret ID is provided
+BOT_TOKEN=""
+if [ -z "$BOT_TOKEN_SECRET_ID" ]; then
+    if [ -n "${TELEGRAM_BOT_TOKEN:-}" ]; then
+        BOT_TOKEN="${TELEGRAM_BOT_TOKEN}"
+    elif [ -f ".telegram_bot" ]; then
+        RAW_BOT_TOKEN=$(cat .telegram_bot)
+        BOT_TOKEN=$(printf "%s" "$RAW_BOT_TOKEN" | sed -n 's/.*TELEGRAM_BOT_TOKEN=//p' | head -n1 | tr -d '\r')
+        if [ -z "$BOT_TOKEN" ]; then
+            BOT_TOKEN=$(printf "%s" "$RAW_BOT_TOKEN" | grep -Eo '[0-9]+:[A-Za-z0-9_-]+' | head -n1)
+        fi
+    fi
+    if [ -z "$BOT_TOKEN" ]; then
+        echo "❌ Error: Telegram bot token not found and no TELEGRAM_BOT_TOKEN_SECRET_ID provided!"
+        exit 1
+    fi
 fi
 
 # Set project
@@ -63,6 +72,15 @@ echo "🏗️  Building Docker image..."
 echo "⏳ Cloud Build can take several minutes, please wait..."
 gcloud builds submit --tag ${IMAGE_NAME} --timeout=${BUILD_TIMEOUT}
 
+# Prepare env vars for agent
+AGENT_ENVS="GCP_PROJECT_ID=${PROJECT_ID},GCP_LOCATION=${REGION}"
+if [ -n "$API_KEY" ]; then
+  AGENT_ENVS="${AGENT_ENVS},GOOGLE_API_KEY=${API_KEY}"
+fi
+if [ -n "$API_KEY_SECRET_ID" ]; then
+  AGENT_ENVS="${AGENT_ENVS},GOOGLE_API_KEY_SECRET_ID=${API_KEY_SECRET_ID}"
+fi
+
 # Deploy to Cloud Run
 echo "☁️  Deploying to Cloud Run..."
 gcloud run deploy ${SERVICE_NAME} \
@@ -70,7 +88,7 @@ gcloud run deploy ${SERVICE_NAME} \
   --platform managed \
   --region ${REGION} \
   --allow-unauthenticated \
-  --set-env-vars "GCP_PROJECT_ID=${PROJECT_ID},GCP_LOCATION=${REGION},GOOGLE_API_KEY=${API_KEY}" \
+  --set-env-vars "${AGENT_ENVS}" \
   --memory 2Gi \
   --cpu 2 \
   --timeout 300 \
@@ -90,6 +108,15 @@ echo ""
 # Deploy Telegram bot (reuses same image). We run bot + uvicorn for health/metrics on :8080.
 echo ""
 echo "🤖 Deploying Telegram bot to Cloud Run..."
+# Prepare env vars for bot
+BOT_ENVS="AGENT_API_URL=${SERVICE_URL},GCP_PROJECT_ID=${PROJECT_ID},GCP_LOCATION=${REGION}"
+if [ -n "$BOT_TOKEN" ]; then
+  BOT_ENVS="${BOT_ENVS},TELEGRAM_BOT_TOKEN=${BOT_TOKEN}"
+fi
+if [ -n "$BOT_TOKEN_SECRET_ID" ]; then
+  BOT_ENVS="${BOT_ENVS},TELEGRAM_BOT_TOKEN_SECRET_ID=${BOT_TOKEN_SECRET_ID}"
+fi
+
 gcloud run deploy ${BOT_SERVICE_NAME} \
   --image ${IMAGE_NAME} \
   --platform managed \
@@ -97,7 +124,7 @@ gcloud run deploy ${BOT_SERVICE_NAME} \
   --allow-unauthenticated \
   --command "/bin/sh" \
   --args "/app/start_bot_service.sh" \
-  --set-env-vars "TELEGRAM_BOT_TOKEN=${BOT_TOKEN},AGENT_API_URL=${SERVICE_URL}" \
+  --set-env-vars "${BOT_ENVS}" \
   --memory 512Mi \
   --cpu 1 \
   --timeout 300

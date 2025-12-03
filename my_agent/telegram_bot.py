@@ -6,6 +6,7 @@ Only supported command: /chat <text>. Forwards the text to /api/chat and returns
 """
 import os
 import re
+import time
 import logging
 
 import httpx
@@ -63,6 +64,9 @@ def read_token() -> str:
 
 
 API_URL = os.getenv("AGENT_API_URL", "http://localhost:8000")
+WEBHOOK_URL = os.getenv("TELEGRAM_WEBHOOK_URL")
+WEBHOOK_PATH = os.getenv("TELEGRAM_WEBHOOK_PATH", "/telegram/webhook")
+PORT = int(os.getenv("PORT", "8080"))
 
 
 async def chat_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -79,20 +83,41 @@ async def chat_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     session_id = f"tg_{update.effective_user.id}"
 
     try:
+        t0 = time.monotonic()
         async with httpx.AsyncClient() as client:
             resp = await client.post(
                 f"{API_URL}/api/chat",
                 json={"message": user_text, "session_id": session_id},
                 timeout=30,
             )
-            resp.raise_for_status()
-            data = resp.json()
-            reply = data.get("response", "(no response)")
+        t1 = time.monotonic()
+        resp.raise_for_status()
+        data = resp.json()
+        reply = data.get("response", "(no response)")
+        trace_id = resp.headers.get("X-Trace-Id")
+        logger.info(
+            "agent_call session=%s latency_ms=%.2f trace_id=%s status=%s",
+            session_id,
+            (t1 - t0) * 1000,
+            trace_id,
+            resp.status_code,
+        )
     except Exception as exc:
         logger.error("Error talking to agent: %s", exc)
         reply = "Sorry, I could not reach the agent."
+        t1 = time.monotonic()
+        trace_id = None
 
+    t_send_start = time.monotonic()
     await update.message.reply_text(reply)
+    t_send_end = time.monotonic()
+    logger.info(
+        "telegram_send session=%s trace_id=%s send_latency_ms=%.2f total_latency_ms=%.2f",
+        session_id,
+        trace_id,
+        (t_send_end - t_send_start) * 1000,
+        (t_send_end - t0) * 1000,
+    )
 
 
 def main() -> None:
@@ -106,8 +131,23 @@ def main() -> None:
 
     app.add_handler(CommandHandler("chat", chat_command))
 
-    logger.info("Starting Telegram bot; forwarding to %s", API_URL)
-    app.run_polling()
+    if WEBHOOK_URL:
+        # Webhook mode (Cloud Run friendly, avoids polling conflicts)
+        logger.info(
+            "Starting Telegram bot in webhook mode; forwarding to %s webhook=%s",
+            API_URL,
+            WEBHOOK_URL,
+        )
+        # Ensure webhook is set
+        app.run_webhook(
+            listen="0.0.0.0",
+            port=PORT,
+            url_path=WEBHOOK_PATH.lstrip("/"),
+            webhook_url=WEBHOOK_URL.rstrip("/"),
+        )
+    else:
+        logger.info("Starting Telegram bot in polling mode; forwarding to %s", API_URL)
+        app.run_polling()
 
 
 if __name__ == "__main__":
