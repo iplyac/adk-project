@@ -6,6 +6,7 @@ Only supported command: /chat <text>. Forwards the text to /api/chat and returns
 """
 import os
 import re
+import time
 import logging
 
 import httpx
@@ -79,20 +80,45 @@ async def chat_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     session_id = f"tg_{update.effective_user.id}"
 
     try:
+        t0 = time.monotonic()
         async with httpx.AsyncClient() as client:
             resp = await client.post(
                 f"{API_URL}/api/chat",
                 json={"message": user_text, "session_id": session_id},
                 timeout=30,
             )
-            resp.raise_for_status()
-            data = resp.json()
-            reply = data.get("response", "(no response)")
+        t1 = time.monotonic()
+        resp.raise_for_status()
+        data = resp.json()
+        reply = data.get("response", "(no response)")
+        trace_id = resp.headers.get("X-Trace-Id")
+        logger.info(
+            "agent_call",
+            extra={
+                "session_id": session_id,
+                "latency_ms": round((t1 - t0) * 1000, 2),
+                "trace_id": trace_id,
+                "status": resp.status_code,
+            },
+        )
     except Exception as exc:
         logger.error("Error talking to agent: %s", exc)
         reply = "Sorry, I could not reach the agent."
+        t1 = time.monotonic()
+        trace_id = None
 
+    t_send_start = time.monotonic()
     await update.message.reply_text(reply)
+    t_send_end = time.monotonic()
+    logger.info(
+        "telegram_send",
+        extra={
+            "session_id": session_id,
+            "trace_id": trace_id,
+            "send_latency_ms": round((t_send_end - t_send_start) * 1000, 2),
+            "total_latency_ms": round((t_send_end - t0) * 1000, 2),
+        },
+    )
 
 
 def main() -> None:
