@@ -14,8 +14,20 @@ from google.adk.sessions.in_memory_session_service import InMemorySessionService
 from google.genai import types
 from dotenv import load_dotenv
 
+from my_agent.secret_manager import load_secret_into_env
+
 # Load environment variables from .env file
 load_dotenv()
+
+# Populate sensitive environment variables from Google Secret Manager when
+# available. This allows deployments to provide secret IDs instead of raw
+# values. Missing secrets silently fall back to any already-set environment
+# variables to keep local development simple.
+for env_var, secret_env in (
+    ("GOOGLE_API_KEY", "GOOGLE_API_KEY_SECRET_ID"),
+    ("TELEGRAM_BOT_TOKEN", "TELEGRAM_BOT_TOKEN_SECRET_ID"),
+):
+    load_secret_into_env(env_var, secret_env)
 
 from my_agent.agent import agent
 from my_agent.session_monitor import session_monitor

@@ -57,10 +57,8 @@ The DevOps agent requires Google Cloud credentials to interact with Pub/Sub and 
    ```
 
 3. Configure API Key:
-   The `.env` file is already configured with your API key.
-   ```
-   GOOGLE_API_KEY=your_api_key_here
-   ```
+   - **Recommended (production):** Store secrets in [Google Secret Manager](https://cloud.google.com/secret-manager). Set the environment variable `GOOGLE_API_KEY_SECRET_ID` to the secret name (or full resource path). At startup the app will fetch the value into `GOOGLE_API_KEY`. You can also set `TELEGRAM_BOT_TOKEN_SECRET_ID` to hydrate the Telegram token.
+   - **Local development:** You can still use a `.env` file with raw values if Secret Manager is not configured.
 
 ## Usage
 

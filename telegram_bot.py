@@ -14,14 +14,17 @@ from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
 
-# Load environment variables
-load_dotenv()
+from my_agent.secret_manager import load_secret_into_env
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
+
+# Load environment variables
+load_dotenv()
+load_secret_into_env("TELEGRAM_BOT_TOKEN", "TELEGRAM_BOT_TOKEN_SECRET_ID", logger=logger)
 
 
 def read_token() -> str:
