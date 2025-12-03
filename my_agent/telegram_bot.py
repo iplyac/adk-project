@@ -93,13 +93,11 @@ async def chat_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         reply = data.get("response", "(no response)")
         trace_id = resp.headers.get("X-Trace-Id")
         logger.info(
-            "agent_call",
-            extra={
-                "session_id": session_id,
-                "latency_ms": round((t1 - t0) * 1000, 2),
-                "trace_id": trace_id,
-                "status": resp.status_code,
-            },
+            "agent_call session=%s latency_ms=%.2f trace_id=%s status=%s",
+            session_id,
+            (t1 - t0) * 1000,
+            trace_id,
+            resp.status_code,
         )
     except Exception as exc:
         logger.error("Error talking to agent: %s", exc)
@@ -111,13 +109,11 @@ async def chat_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await update.message.reply_text(reply)
     t_send_end = time.monotonic()
     logger.info(
-        "telegram_send",
-        extra={
-            "session_id": session_id,
-            "trace_id": trace_id,
-            "send_latency_ms": round((t_send_end - t_send_start) * 1000, 2),
-            "total_latency_ms": round((t_send_end - t0) * 1000, 2),
-        },
+        "telegram_send session=%s trace_id=%s send_latency_ms=%.2f total_latency_ms=%.2f",
+        session_id,
+        trace_id,
+        (t_send_end - t_send_start) * 1000,
+        (t_send_end - t0) * 1000,
     )
 
 
