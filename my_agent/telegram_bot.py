@@ -64,6 +64,9 @@ def read_token() -> str:
 
 
 API_URL = os.getenv("AGENT_API_URL", "http://localhost:8000")
+WEBHOOK_URL = os.getenv("TELEGRAM_WEBHOOK_URL")
+WEBHOOK_PATH = os.getenv("TELEGRAM_WEBHOOK_PATH", "/telegram/webhook")
+PORT = int(os.getenv("PORT", "8080"))
 
 
 async def chat_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -128,8 +131,23 @@ def main() -> None:
 
     app.add_handler(CommandHandler("chat", chat_command))
 
-    logger.info("Starting Telegram bot; forwarding to %s", API_URL)
-    app.run_polling()
+    if WEBHOOK_URL:
+        # Webhook mode (Cloud Run friendly, avoids polling conflicts)
+        logger.info(
+            "Starting Telegram bot in webhook mode; forwarding to %s webhook=%s",
+            API_URL,
+            WEBHOOK_URL,
+        )
+        # Ensure webhook is set
+        app.run_webhook(
+            listen="0.0.0.0",
+            port=PORT,
+            url_path=WEBHOOK_PATH.lstrip("/"),
+            webhook_url=WEBHOOK_URL.rstrip("/"),
+        )
+    else:
+        logger.info("Starting Telegram bot in polling mode; forwarding to %s", API_URL)
+        app.run_polling()
 
 
 if __name__ == "__main__":
