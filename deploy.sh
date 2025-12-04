@@ -3,13 +3,14 @@ set -e
 
 # Configuration
 PROJECT_ID="gen-lang-client-0741140892"
-REGION="us-central1"
+REGION="europe-west4"
 SERVICE_NAME="adk-agent"
 IMAGE_NAME="gcr.io/${PROJECT_ID}/${SERVICE_NAME}"
 BOT_SERVICE_NAME="adk-telegram-bot"
 BUILD_TIMEOUT="1200s" # allow up to 20 minutes in Cloud Build
 API_KEY_SECRET_ID_DEFAULT="GOOGLE_API_KEY"
 BOT_TOKEN_SECRET_ID_DEFAULT="TELEGRAM_BOT_TOKEN"
+BOT_WEBHOOK_PATH="${TELEGRAM_WEBHOOK_PATH:-/telegram/webhook}"
 
 echo "🚀 Deploying ADK Agent to Cloud Run..."
 echo "Project: ${PROJECT_ID}"
@@ -105,16 +106,26 @@ echo "Test the deployment:"
 echo "  curl ${SERVICE_URL}/health"
 echo "  curl -X POST ${SERVICE_URL}/api/chat -H 'Content-Type: application/json' -d '{\"message\": \"Hello\", \"session_id\": \"test\"}'"
 echo ""
-# Deploy Telegram bot (reuses same image). We run bot + uvicorn for health/metrics on :8080.
+# Deploy Telegram bot (webhook mode) so container listens on PORT=8080.
 echo ""
-echo "🤖 Deploying Telegram bot to Cloud Run..."
-# Prepare env vars for bot
-BOT_ENVS="AGENT_API_URL=${SERVICE_URL},GCP_PROJECT_ID=${PROJECT_ID},GCP_LOCATION=${REGION}"
-if [ -n "$BOT_TOKEN" ]; then
-  BOT_ENVS="${BOT_ENVS},TELEGRAM_BOT_TOKEN=${BOT_TOKEN}"
-fi
+echo "🤖 Deploying Telegram bot to Cloud Run (webhook)..."
+
+# Compute default webhook URL using service name pattern
+PROJECT_NUMBER=$(gcloud projects describe ${PROJECT_ID} --format='value(projectNumber)')
+BOT_WEBHOOK_URL=${TELEGRAM_WEBHOOK_URL:-"https://${BOT_SERVICE_NAME}-${PROJECT_NUMBER}.${REGION}.run.app${BOT_WEBHOOK_PATH}"}
+
+BOT_ENVS="AGENT_API_URL=${SERVICE_URL},GCP_PROJECT_ID=${PROJECT_ID},GCP_LOCATION=${REGION},TELEGRAM_WEBHOOK_URL=${BOT_WEBHOOK_URL},TELEGRAM_WEBHOOK_PATH=${BOT_WEBHOOK_PATH}"
+
 if [ -n "$BOT_TOKEN_SECRET_ID" ]; then
-  BOT_ENVS="${BOT_ENVS},TELEGRAM_BOT_TOKEN_SECRET_ID=${BOT_TOKEN_SECRET_ID}"
+  BOT_SECRET_FLAG="--set-secrets TELEGRAM_BOT_TOKEN=${BOT_TOKEN_SECRET_ID}:latest"
+else
+  BOT_SECRET_FLAG=""
+  if [ -n "$BOT_TOKEN" ]; then
+    BOT_ENVS="${BOT_ENVS},TELEGRAM_BOT_TOKEN=${BOT_TOKEN}"
+  else
+    echo "❌ Error: No TELEGRAM_BOT_TOKEN or TELEGRAM_BOT_TOKEN_SECRET_ID provided for the bot!"
+    exit 1
+  fi
 fi
 
 gcloud run deploy ${BOT_SERVICE_NAME} \
@@ -125,6 +136,7 @@ gcloud run deploy ${BOT_SERVICE_NAME} \
   --command "/bin/sh" \
   --args "/app/start_bot_service.sh" \
   --set-env-vars "${BOT_ENVS}" \
+  ${BOT_SECRET_FLAG} \
   --memory 512Mi \
   --cpu 1 \
   --timeout 300
@@ -133,7 +145,7 @@ BOT_URL=$(gcloud run services describe ${BOT_SERVICE_NAME} --region ${REGION} --
 
 echo ""
 echo "✅ Telegram bot deployed!"
-echo "🌐 Bot Service URL (for health): ${BOT_URL}"
+echo "🌐 Bot Service URL (for webhook + health): ${BOT_URL}"
 echo ""
 echo "Next steps:"
 echo "  1. Test the agent: curl ${SERVICE_URL}/health"

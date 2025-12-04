@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 from zoneinfo import ZoneInfo
 from google.adk.agents import Agent
@@ -74,73 +75,61 @@ from google.genai import types
 from my_agent.devops_agent import devops_agent
 from my_agent.session_monitor import session_monitor
 
-def ask_devops(request: str) -> str:
-    """Delegates a request to the DevOps agent.
-    
-    Args:
-        request (str): The user's request for the DevOps agent.
-        
-    Returns:
-        str: The response from the DevOps agent.
+# Reuse one session service/runner so delegated calls can retain history per session_id
+_devops_session_service = InMemorySessionService()
+_devops_runner = Runner(
+    app_name="devops_app",
+    agent=devops_agent,
+    session_service=_devops_session_service,
+)
+
+async def ask_devops(
+    request: str,
+    session_id: str | None = None,
+    user_id: str = "main_agent",
+    timeout_seconds: float = 30.0,
+) -> str:
+    """Delegate a request to the DevOps agent (async tool-friendly).
+
+    Uses a stable session id per user when one is not provided so multi-turn
+    delegations keep their context instead of spawning new sessions.
     """
-    session_service = InMemorySessionService()
-    runner = Runner(
+    session = session_id or f"delegation_{user_id}"
+
+    # Ensure session exists so multi-turn delegations can reuse history
+    existing = await _devops_session_service.get_session(
         app_name="devops_app",
-        agent=devops_agent,
-        session_service=session_service
+        user_id=user_id,
+        session_id=session,
     )
-    
-    session_id = "delegation_session"
-    user_id = "main_agent"
-    
-    response_text = ""
-    
-    import asyncio
-    
-    async def run_devops():
-        # Create session first
-        await session_service.create_session(
+    if not existing:
+        await _devops_session_service.create_session(
             app_name="devops_app",
             user_id=user_id,
-            session_id=session_id
+            session_id=session,
         )
 
-        result = ""
-        async for event in runner.run_async(
+    async def _run() -> str:
+        response_text = ""
+        async for event in _devops_runner.run_async(
             user_id=user_id,
-            session_id=session_id,
-            new_message=types.Content(
-                role="user",
-                parts=[types.Part(text=request)]
-            )
+            session_id=session,
+            new_message=types.Content(role="user", parts=[types.Part(text=request)]),
         ):
             if event.content and event.content.parts:
                 for part in event.content.parts:
                     if part.text:
-                        result += part.text
-        return result
+                        response_text += part.text
+        return response_text
 
     try:
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            
-        if loop.is_running():
-             import concurrent.futures
-             with concurrent.futures.ThreadPoolExecutor() as executor:
-                 future = executor.submit(asyncio.run, run_devops())
-                 response_text = future.result()
-        else:
-             response_text = loop.run_until_complete(run_devops())
-             
-    except Exception as e:
+        return await asyncio.wait_for(_run(), timeout=timeout_seconds)
+    except asyncio.TimeoutError:
+        return "DevOps agent timed out while processing the request."
+    except Exception as exc:  # pragma: no cover - defensive
         import logging
-        logging.getLogger(__name__).error(f"Error in ask_devops: {e}", exc_info=True)
-        return f"Error calling DevOps agent: {str(e)}"
-
-    return response_text
+        logging.getLogger(__name__).error("Error in ask_devops", exc_info=True)
+        return f"Error calling DevOps agent: {exc}"
 
 def get_session_summary(scope: str = "active") -> dict:
     """Return a summary of known sessions."""

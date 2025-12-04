@@ -12,7 +12,7 @@ import subprocess
 
 # Configuration
 PROJECT_ID = "gen-lang-client-0741140892"
-LOCATION = "us-central1"
+LOCATION = "europe-west4"
 SERVICE_NAME = "adk-agent"
 
 def get_cloud_run_url():

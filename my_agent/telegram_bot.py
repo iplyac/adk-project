@@ -34,7 +34,7 @@ def _extract_token(raw: str) -> str:
         if marker in raw:
             return raw.split(marker, 1)[1].strip()
     # Try regex token pattern
-    m = re.search(r"\\b(\\d+:[A-Za-z0-9_-]+)", raw)
+    m = re.search(r"\b(\d+:[A-Za-z0-9_-]+)", raw)
     if m:
         return m.group(1)
     # Fallback: if there are lines, use first non-empty after '=' if present

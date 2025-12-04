@@ -3,7 +3,7 @@ set -e
 
 # Configuration
 PROJECT_ID="gen-lang-client-0741140892"
-REGION="us-central1"
+REGION="europe-west4"
 SERVICE_NAME="adk-agent"
 IMAGE_NAME="gcr.io/${PROJECT_ID}/${SERVICE_NAME}"
 

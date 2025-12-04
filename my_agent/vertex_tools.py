@@ -13,7 +13,7 @@ def search_knowledge_base(query: str) -> dict:
         dict: status and result (search results) or error msg.
     """
     project_id = os.getenv("GCP_PROJECT_ID")
-    location = os.getenv("GCP_LOCATION", "us-central1")
+    location = os.getenv("GCP_LOCATION") or "europe-west4"
     data_store_id = os.getenv("VERTEX_SEARCH_DATA_STORE_ID")
     
     if not project_id or not data_store_id:
@@ -52,7 +52,14 @@ def search_knowledge_base(query: str) -> dict:
             # Extract relevant fields, this depends on the data schema
             # Common fields for unstructured data:
             title = data.get("title", "No Title")
-            snippet = data.get("snippets", [{}])[0].get("snippet", "")
+            snippets = data.get("snippets") or data.get("extractive_answers") or []
+            snippet = ""
+            if isinstance(snippets, list) and snippets:
+                first = snippets[0]
+                if isinstance(first, dict):
+                    snippet = first.get("snippet") or first.get("content", "")
+                else:
+                    snippet = str(first)
             link = data.get("link", "")
             results.append(f"Title: {title}\nSnippet: {snippet}\nLink: {link}")
             

@@ -11,7 +11,7 @@ services:
       - PORT=8080
       - GOOGLE_APPLICATION_CREDENTIALS=/app/key.json
       - GCP_PROJECT_ID=gen-lang-client-0741140892
-      - GCP_LOCATION=us-central1
+      - GCP_LOCATION=europe-west4
       # - VERTEX_SEARCH_DATA_STORE_ID=your-id
     volumes:
       - ./key.json:/app/key.json

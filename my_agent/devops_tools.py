@@ -1,4 +1,5 @@
 import os
+from google.api_core import exceptions
 from google.cloud import pubsub_v1
 from google.cloud import logging
 
@@ -13,14 +14,24 @@ def create_pubsub_topic(project_id: str, topic_id: str) -> dict:
         dict: status and result or error msg.
     """
     try:
-        publisher = pubsub_v1.PublisherClient()
+        region = os.getenv("PUBSUB_REGION") or os.getenv("GCP_LOCATION")
+        client_options = None
+        if region:
+            client_options = {"api_endpoint": f"{region}-pubsub.googleapis.com"}
+
+        publisher = pubsub_v1.PublisherClient(client_options=client_options)
         topic_path = publisher.topic_path(project_id, topic_id)
 
-        topic = publisher.create_topic(request={"name": topic_path})
+        topic = publisher.create_topic(request={"name": topic_path}, timeout=10)
 
         return {
             "status": "success",
             "report": f"Created topic: {topic.name}"
+        }
+    except exceptions.AlreadyExists:
+        return {
+            "status": "success",
+            "report": f"Topic already exists: {topic_path}"
         }
     except Exception as e:
         return {

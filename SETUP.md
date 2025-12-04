@@ -65,10 +65,14 @@ chmod +x deploy.sh
 ```
 
 The script will:
-- Build optimized Docker image
-- Push to Container Registry
-- Deploy to Cloud Run
-- Output the service URL
+- Build and push the image via Cloud Build
+- Deploy the agent to Cloud Run in `europe-west4`
+- Deploy the Telegram bot in webhook mode (binds `PORT=8080`) to Cloud Run in `europe-west4`
+- Output the service URLs (agent + bot)
+
+Requirements for the script:
+- Secret Manager entries: `GOOGLE_API_KEY` (for the agent) and `TELEGRAM_BOT_TOKEN` (for the bot). The script uses `GOOGLE_API_KEY_SECRET_ID=GOOGLE_API_KEY` and `TELEGRAM_BOT_TOKEN_SECRET_ID=TELEGRAM_BOT_TOKEN` by default.
+- Webhook defaults: `TELEGRAM_WEBHOOK_PATH=/telegram/webhook`, URL is auto-computed as `https://adk-telegram-bot-<PROJECT_NUMBER>.europe-west4.run.app/telegram/webhook`. You can override with `TELEGRAM_WEBHOOK_URL`/`TELEGRAM_WEBHOOK_PATH` envs before running the script.
 
 ### 3. Verify
 
@@ -184,6 +188,6 @@ curl -X POST http://localhost:8000/api/chat \
 ## Support
 
 For issues or questions:
-- Check logs: `gcloud run services logs read adk-agent --region us-central1`
+- Check logs: `gcloud run services logs read adk-agent --region europe-west4`
 - Review documentation in `README.md`
 - Verify configuration in `config.example.yaml`

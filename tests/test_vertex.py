@@ -13,7 +13,7 @@ class TestVertexTools:
         # Setup mock env
         mock_os.getenv.side_effect = lambda key, default=None: {
             "GCP_PROJECT_ID": "test-project",
-            "GCP_LOCATION": "us-central1",
+            "GCP_LOCATION": "europe-west4",
             "VERTEX_SEARCH_DATA_STORE_ID": "test-store"
         }.get(key, default)
         
@@ -60,7 +60,7 @@ class TestVertexTools:
         # Setup mock env
         mock_os.getenv.side_effect = lambda key, default=None: {
             "GCP_PROJECT_ID": "test-project",
-            "GCP_LOCATION": "us-central1",
+            "GCP_LOCATION": "europe-west4",
             "VERTEX_SEARCH_DATA_STORE_ID": "test-store"
         }.get(key, default)
         

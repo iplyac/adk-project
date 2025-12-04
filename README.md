@@ -49,6 +49,15 @@ The DevOps agent requires Google Cloud credentials to interact with Pub/Sub and 
    - **Local development:** You can still use a `.env` file with raw values if Secret Manager is not configured.
    - Webhook mode: set `TELEGRAM_WEBHOOK_URL` (`https://<bot-service>/telegram/webhook`).
 
+## Deployment (Cloud Run)
+
+- Region: `europe-west4`
+- Prereqs: Secret Manager secrets `GOOGLE_API_KEY` (agent) and `TELEGRAM_BOT_TOKEN` (bot). gcloud authenticated to `gen-lang-client-0741140892`.
+- One-step deploy: `./deploy.sh`  
+  - Builds/pushes image via Cloud Build  
+  - Deploys agent to Cloud Run  
+  - Deploys Telegram bot in webhook mode with default path `/telegram/webhook`; webhook URL auto-computed as `https://adk-telegram-bot-<PROJECT_NUMBER>.europe-west4.run.app/telegram/webhook` (override with `TELEGRAM_WEBHOOK_URL`/`TELEGRAM_WEBHOOK_PATH` if needed).
+
 ## Usage
 
 ### Command Line Interface (CLI)
